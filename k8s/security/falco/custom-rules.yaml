@@ -1,0 +1,46 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: falco-custom-rules
+  namespace: security
+data:
+  custom_rules.yaml: |
+    - rule: Suspicious Shell in Container
+      desc: Détecte l'ouverture d'un shell dans un conteneur
+      condition: >
+        spawned_process and container
+        and shell_procs
+        and not container.image.repository in (falco_privileged_images)
+      output: >
+        Shell détecté dans conteneur
+        (user=%user.name container=%container.name
+        image=%container.image.repository
+        cmd=%proc.cmdline)
+      priority: WARNING
+      tags: [container, shell, security]
+
+    - rule: Unauthorized File Access
+      desc: Détecte l'accès à des fichiers sensibles
+      condition: >
+        open_read and container
+        and fd.name in (/etc/passwd, /etc/shadow, /etc/sudoers)
+      output: >
+        Fichier sensible accédé
+        (user=%user.name file=%fd.name
+        container=%container.name)
+      priority: ERROR
+      tags: [container, filesystem, security]
+
+    - rule: Outbound Network Anomaly
+      desc: Connexion réseau sortante inattendue
+      condition: >
+        outbound and container
+        and not fd.sport in (80, 443, 53)
+        and container.name = "app"
+      output: >
+        Connexion réseau anormale
+        (container=%container.name
+        dest=%fd.rip:%fd.rport
+        user=%user.name)
+      priority: WARNING
+      tags: [network, container, security]

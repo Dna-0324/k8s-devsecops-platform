@@ -1,0 +1,59 @@
+# Politique 1 : interdire les conteneurs en root
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: k8snoroot
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sNoRoot
+  targets:
+  - target: admission.k8s.gatekeeper.sh
+    rego: |
+      package k8snoroot
+      violation[{"msg": msg}] {
+        container := input.review.object.spec.containers[_]
+        not container.securityContext.runAsNonRoot
+        msg := sprintf("Container %v doit tourner en non-root", [container.name])
+      }
+---
+# Politique 2 : imposer les resource limits
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: k8srequirelimits
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sRequireLimits
+  targets:
+  - target: admission.k8s.gatekeeper.sh
+    rego: |
+      package k8srequirelimits
+      violation[{"msg": msg}] {
+        container := input.review.object.spec.containers[_]
+        not container.resources.limits.memory
+        msg := sprintf("Container %v doit avoir une limite memory", [container.name])
+      }
+---
+# Politique 3 : interdire les images latest en prod
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: k8snolatesttag
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sNoLatestTag
+  targets:
+  - target: admission.k8s.gatekeeper.sh
+    rego: |
+      package k8snolatesttag
+      violation[{"msg": msg}] {
+        container := input.review.object.spec.containers[_]
+        endswith(container.image, ":latest")
+        msg := sprintf("Container %v ne peut pas utiliser le tag :latest", [container.name])
+      }

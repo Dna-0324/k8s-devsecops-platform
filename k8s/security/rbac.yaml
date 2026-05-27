@@ -1,0 +1,64 @@
+# Role pour les developpeurs - lecture seule sur namespace app
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: developer-role
+  namespace: app
+rules:
+- apiGroups: [""]
+  resources: ["pods", "services", "configmaps"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["apps"]
+  resources: ["deployments"]
+  verbs: ["get", "list", "watch"]
+---
+# Role pour le CI/CD - deploiement uniquement
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cicd-role
+  namespace: app
+rules:
+- apiGroups: ["apps"]
+  resources: ["deployments"]
+  verbs: ["get", "list", "watch", "update", "patch"]
+- apiGroups: [""]
+  resources: ["pods", "services"]
+  verbs: ["get", "list", "watch", "create", "update", "patch"]
+---
+# ServiceAccount pour le CI/CD
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cicd-sa
+  namespace: app
+---
+# Binding developer
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: developer-binding
+  namespace: app
+subjects:
+- kind: Group
+  name: developers
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: developer-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# Binding CI/CD
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cicd-binding
+  namespace: app
+subjects:
+- kind: ServiceAccount
+  name: cicd-sa
+  namespace: app
+roleRef:
+  kind: Role
+  name: cicd-role
+  apiGroup: rbac.authorization.k8s.io
