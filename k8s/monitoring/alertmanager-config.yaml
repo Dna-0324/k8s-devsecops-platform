@@ -1,0 +1,27 @@
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: AlertmanagerConfig
+metadata:
+  name: security-alertmanager-config
+  namespace: monitoring
+  labels:
+    release: prometheus
+spec:
+  route:
+    groupBy: ['alertname', 'severity']
+    groupWait: 30s
+    groupInterval: 5m
+    repeatInterval: 12h
+    receiver: 'default-receiver'
+    routes:
+    - matchers:
+      - name: severity
+        value: critical
+      receiver: critical-receiver
+    - matchers:
+      - name: severity
+        value: warning
+      receiver: warning-receiver
+  receivers:
+  - name: 'default-receiver'
+  - name: 'critical-receiver'
+  - name: 'warning-receiver'

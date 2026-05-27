@@ -1,0 +1,71 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: remediation-sa
+  namespace: security
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: remediation-role
+rules:
+- apiGroups: [""]
+  resources: ["pods", "namespaces", "events"]
+  verbs: ["get", "list", "watch", "patch", "update"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["networkpolicies"]
+  verbs: ["get", "list", "create", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: remediation-binding
+subjects:
+- kind: ServiceAccount
+  name: remediation-sa
+  namespace: security
+roleRef:
+  kind: ClusterRole
+  name: remediation-role
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: auto-remediation
+  namespace: security
+spec:
+  schedule: "*/5 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: remediation-sa
+          containers:
+          - name: remediation
+            image: bitnami/kubectl:latest
+            command:
+            - /bin/sh
+            - -c
+            - |
+              echo "=== Auto-Remediation $(date) ===" 
+              
+              # Détecter pods CrashLoop
+              echo "Scan CrashLoop pods..."
+              kubectl get pods -A -o json | \
+                python3 -c "
+              import json, sys
+              data = json.load(sys.stdin)
+              for item in data['items']:
+                name = item['metadata']['name']
+                ns = item['metadata']['namespace']
+                for cs in item.get('status', {}).get('containerStatuses', []):
+                  if cs.get('restartCount', 0) > 5:
+                    print(f'ALERTE: {name} dans {ns} - {cs[\"restartCount\"]} restarts')
+              "
+              
+              # Rapport état cluster
+              echo "=== État Nodes ===" && kubectl get nodes
+              echo "=== Pods suspects ===" && kubectl get pods -A | grep -E "Error|CrashLoop|OOMKilled" || echo "Aucun pod suspect"
+              echo "=== Pods quarantaine ===" && kubectl get pods -A -l security=quarantine || echo "Aucun"
+          restartPolicy: OnFailure

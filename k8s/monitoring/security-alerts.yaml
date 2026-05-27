@@ -1,0 +1,56 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: security-alerts
+  namespace: monitoring
+  labels:
+    release: prometheus
+spec:
+  groups:
+  - name: security.rules
+    interval: 30s
+    rules:
+    - alert: PodCrashLooping
+      expr: rate(kube_pod_container_status_restarts_total[5m]) * 300 > 1
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Pod {{ $labels.pod }} en CrashLoop"
+        description: "Pod {{ $labels.pod }} redémarre trop fréquemment dans {{ $labels.namespace }}"
+
+    - alert: UnauthorizedAPIAccess
+      expr: increase(apiserver_audit_event_total{verb="create",responseStatus="403"}[5m]) > 5
+      for: 2m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Accès API non autorisé détecté"
+        description: "Plus de 5 tentatives refusées sur l'API Kubernetes"
+
+    - alert: HighMemoryUsage
+      expr: container_memory_usage_bytes / container_spec_memory_limit_bytes > 0.9
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Mémoire critique - {{ $labels.container }}"
+        description: "Container {{ $labels.container }} utilise plus de 90% de sa limite mémoire"
+
+    - alert: NodeNotReady
+      expr: kube_node_status_condition{condition="Ready",status="true"} == 0
+      for: 2m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Node {{ $labels.node }} non disponible"
+        description: "Un node EKS est down depuis plus de 2 minutes"
+
+    - alert: TooManyContainersRunningAsRoot
+      expr: count(kube_pod_container_info{namespace="app"}) by (namespace) > 0
+      for: 1m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Vérification sécurité containers namespace app"
+        description: "Audit des containers dans le namespace app"
